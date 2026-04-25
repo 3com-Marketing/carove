@@ -693,7 +693,7 @@ export interface TaxModelPeriod {
 }
 
 // ─── User / Roles ────────────────────────────────────────────────────────────
-export type UserRole = 'admin' | 'vendedor' | 'postventa' | 'contabilidad' | 'manager';
+export type UserRole = 'administrador' | 'vendedor' | 'postventa' | 'contabilidad';
 
 // ─── Company / Branches / Channels / Segments ────────────────────────────────
 export interface CompanySettings {
