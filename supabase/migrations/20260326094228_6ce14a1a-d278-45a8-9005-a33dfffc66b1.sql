@@ -1,0 +1,1 @@
+ALTER TABLE public.reservation_documents ADD COLUMN IF NOT EXISTS html_content text;

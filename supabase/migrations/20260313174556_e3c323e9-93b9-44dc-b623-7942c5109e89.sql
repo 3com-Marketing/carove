@@ -1,0 +1,1 @@
+ALTER TABLE public.finance_term_models ADD COLUMN commission_percent numeric DEFAULT NULL;

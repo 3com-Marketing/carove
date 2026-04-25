@@ -1,0 +1,35 @@
+[functions.generate-vehicle]
+verify_jwt = false
+
+[functions.ai-assistant]
+verify_jwt = false
+
+[functions.generate-invoice-pdf]
+verify_jwt = false
+
+[functions.check-reservation-alerts]
+verify_jwt = false
+
+[functions.generate-report-pdf]
+verify_jwt = false
+
+[functions.extract-pdf-data]
+verify_jwt = false
+
+[functions.invite-user]
+verify_jwt = false
+
+[functions.send-proposal-email]
+verify_jwt = false
+
+[functions.generate-thumbnail]
+verify_jwt = false
+
+[functions.enhance-vehicle-image]
+verify_jwt = false
+
+[functions.generate-caption]
+verify_jwt = false
+
+[functions.generate-email-content]
+verify_jwt = false

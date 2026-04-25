@@ -1,0 +1,1 @@
+ALTER TABLE public.finance_rappels ADD COLUMN IF NOT EXISTS entity_id uuid REFERENCES public.finance_entities(id);

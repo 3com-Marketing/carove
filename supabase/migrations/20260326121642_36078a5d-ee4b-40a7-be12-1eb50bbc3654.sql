@@ -1,0 +1,2 @@
+ALTER TABLE public.cash_sessions DROP CONSTRAINT IF EXISTS cash_sessions_tpv_status_check;
+ALTER TABLE public.cash_sessions ADD CONSTRAINT cash_sessions_tpv_status_check CHECK (tpv_status IS NULL OR tpv_status IN ('correcto', 'descuadre', 'pendiente_revision', 'pendiente'));
