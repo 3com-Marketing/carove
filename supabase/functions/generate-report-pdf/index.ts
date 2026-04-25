@@ -12,11 +12,12 @@
 // Tipos soportados:
 //   - reservation-contract    → contrato de reserva (params: reservation_id)
 //   - reservation-receipt     → recibo de señal (params: reservation_id)
-//   - purchase-contract       → contrato de compra (params: purchase_id)
+//   - purchase-contract       → contrato de compraventa al particular (params: purchase_id)
+//   - sales-contract          → contrato de venta al cliente (params: reservation_id)
+//   - proforma-invoice        → factura proforma (params: reservation_id)
 //
 // Tipos pendientes de implementar (devuelven 501):
-//   - sales-contract, proforma-invoice, finance-proposal,
-//     pyg, balance, vehicle-margin
+//   - finance-proposal, pyg, balance, vehicle-margin
 //
 // Despliegue:
 //   supabase functions deploy generate-report-pdf --project-ref flstoaobldowsmsskgiz
@@ -852,6 +853,358 @@ ${TOOLBAR_HTML}
 </html>`;
 }
 
+async function generateSalesContract(
+  admin: any,
+  reservationId: string,
+): Promise<string> {
+  const { data: reservation, error: rerr } = await admin
+    .from("reservations")
+    .select("*")
+    .eq("id", reservationId)
+    .maybeSingle();
+  if (rerr) throw new Error("Reserva no encontrada: " + rerr.message);
+  if (!reservation) throw new Error("Reserva no encontrada");
+
+  const [
+    { data: vehicle },
+    { data: buyer },
+    { data: company },
+    { data: clauses },
+  ] = await Promise.all([
+    admin.from("vehicles").select("*").eq("id", reservation.vehicle_id).maybeSingle(),
+    admin.from("buyers").select("*").eq("id", reservation.buyer_id).maybeSingle(),
+    admin.from("company_settings").select("*").limit(1).maybeSingle(),
+    admin
+      .from("reservation_clauses")
+      .select("title, content, order_index")
+      .eq("active", true)
+      .order("order_index", { ascending: true }),
+  ]);
+
+  const pvp = Number(reservation.vehicle_pvp_snapshot || vehicle?.pvp_base || 0);
+  const senal = Number(reservation.reservation_amount || 0);
+  const taxRate = Number(vehicle?.tax_rate ?? company?.igic_rate ?? 7);
+  const taxType = String(vehicle?.tax_type || "igic").toUpperCase();
+
+  // Para vehículos en régimen REBU el IGIC/IVA no se desglosa.
+  const isRebu = String(vehicle?.tax_type || "").toLowerCase() === "rebu";
+  const isExempt = String(vehicle?.tax_type || "").toLowerCase() === "exento";
+  const showsTaxBreakdown = !isRebu && !isExempt && taxRate > 0;
+
+  // PVP es el precio "todo incluido". Si hay desglose, calculamos base.
+  const baseAmount = showsTaxBreakdown ? pvp / (1 + taxRate / 100) : pvp;
+  const taxAmount = showsTaxBreakdown ? pvp - baseAmount : 0;
+  const totalAmount = pvp;
+  const restoPagar = totalAmount - senal;
+
+  const docId = `CV-${(reservation.id || "").slice(0, 8).toUpperCase()}`;
+  const docDate = fmtDate(reservation.signed_at || reservation.reservation_date || reservation.created_at);
+  const docName = company?.company_name || "Carove";
+  const placeDate = `En ${company?.city || "Las Palmas"}, a ${fmtDateLong(reservation.signed_at || reservation.reservation_date || reservation.created_at)}`;
+
+  const fallbackClauses = [
+    {
+      title: "Objeto del contrato",
+      content:
+        "El VENDEDOR transmite al COMPRADOR la propiedad del vehículo descrito a continuación, libre de cargas, gravámenes y embargos, y el COMPRADOR lo adquiere por el precio acordado en este contrato.",
+    },
+    {
+      title: "Estado del vehículo",
+      content:
+        "El COMPRADOR declara haber inspeccionado el vehículo y conocer su estado físico, mecánico y kilometraje. La operación se realiza en el estado en que se encuentra, con la documentación al día y libre de obligaciones tributarias o multas anteriores a la fecha de firma.",
+    },
+    {
+      title: "Precio y forma de pago",
+      content:
+        "El precio total acordado se desglosa en el cuadro económico anterior. La señal entregada en el momento de la reserva se descuenta del precio total. El COMPRADOR se obliga a satisfacer el resto del precio antes de la entrega del vehículo.",
+    },
+    {
+      title: "Garantía",
+      content:
+        "El vehículo se entrega con la garantía legal aplicable a la venta de vehículos usados conforme a la normativa vigente. Las particularidades de cobertura, plazos y exclusiones se entregan en documento aparte si aplica.",
+    },
+    {
+      title: "Transferencia de titularidad",
+      content:
+        "El VENDEDOR se compromete a entregar al COMPRADOR la documentación necesaria (permiso de circulación, ficha técnica, justificante del IVTM al corriente y los demás documentos pertinentes) para realizar el cambio de titularidad ante la Jefatura Provincial de Tráfico.",
+    },
+    {
+      title: "Entrega del vehículo",
+      content:
+        "La entrega material del vehículo se producirá una vez se haya satisfecho el precio total y se hayan completado los trámites administrativos correspondientes. A partir de la entrega, el COMPRADOR asume todos los riesgos y responsabilidades sobre el vehículo.",
+    },
+    {
+      title: "Protección de datos",
+      content:
+        "Los datos personales facilitados serán tratados conforme al RGPD y la LOPDGDD para la gestión de la operación, su facturación y los trámites administrativos. El COMPRADOR podrá ejercer sus derechos dirigiéndose al VENDEDOR.",
+    },
+    {
+      title: "Jurisdicción aplicable",
+      content:
+        "Para cualquier controversia derivada de este contrato, las partes se someten a los Tribunales y Juzgados del domicilio del VENDEDOR, con renuncia expresa a cualquier otro fuero que pudiera corresponderles.",
+    },
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Contrato de venta ${docId}</title>
+${COMMON_CSS}
+</head>
+<body>
+${TOOLBAR_HTML}
+<div class="page">
+  ${renderHeader({
+    company,
+    docType: "Contrato de venta",
+    docId,
+    docDate,
+  })}
+
+  <h1>CONTRATO DE COMPRAVENTA DE VEHÍCULO</h1>
+
+  <h2>Partes</h2>
+  <div class="grid-2">
+    <div class="party">
+      <div class="label">Vendedor</div>
+      <div class="name">${escapeHtml(docName)}</div>
+      <div class="meta">
+        ${company?.cif ? `CIF: ${escapeHtml(company.cif)}<br>` : ""}
+        ${[company?.address, company?.postal_code, company?.city]
+          .filter(Boolean)
+          .map(escapeHtml)
+          .join(", ")}
+        ${company?.phone ? `<br>Tel: ${escapeHtml(company.phone)}` : ""}
+        ${company?.email ? `<br>${escapeHtml(company.email)}` : ""}
+      </div>
+    </div>
+    <div class="party">
+      <div class="label">Comprador</div>
+      <div class="name">${escapeHtml(buyerName(buyer))}</div>
+      <div class="meta">
+        ${buyer ? `${buyer.client_type === "profesional" || buyer.client_type === "empresa" ? "CIF" : "DNI"}: ${escapeHtml(buyerTaxId(buyer))}<br>` : ""}
+        ${escapeHtml(buyerFullAddress(buyer))}
+        ${buyer?.phone ? `<br>Tel: ${escapeHtml(buyer.phone)}` : ""}
+        ${buyer?.email ? `<br>${escapeHtml(buyer.email)}` : ""}
+      </div>
+    </div>
+  </div>
+
+  <h2>Vehículo objeto de la compraventa</h2>
+  <table>
+    <tbody>
+      <tr><th style="width:30%">Marca y modelo</th><td>${escapeHtml(vehicle?.brand || "")} ${escapeHtml(vehicle?.model || "")} ${escapeHtml(vehicle?.version || "")}</td></tr>
+      <tr><th>Matrícula</th><td>${escapeHtml(vehicle?.plate || "—")}</td></tr>
+      <tr><th>VIN / Bastidor</th><td style="font-family:ui-monospace,monospace">${escapeHtml(vehicle?.vin || "—")}</td></tr>
+      <tr><th>1ª matriculación</th><td>${fmtDate(vehicle?.first_registration)}</td></tr>
+      <tr><th>Combustible</th><td>${escapeHtml(vehicle?.fuel_type || vehicle?.engine_type || "—")}</td></tr>
+      <tr><th>Kilometraje</th><td>${vehicle?.km_entry != null ? Number(vehicle.km_entry).toLocaleString("es-ES") + " km" : vehicle?.mileage != null ? Number(vehicle.mileage).toLocaleString("es-ES") + " km" : "—"}</td></tr>
+      <tr><th>Color</th><td>${escapeHtml(vehicle?.color || "—")}</td></tr>
+      <tr><th>Régimen fiscal</th><td>${escapeHtml(taxType)}${isRebu ? " (Régimen Especial Bienes Usados)" : ""}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Condiciones económicas</h2>
+  <div class="summary">
+    ${showsTaxBreakdown ? `
+      <div class="row"><span>Base imponible</span><span>${fmtCurrency(baseAmount)}</span></div>
+      <div class="row"><span>${escapeHtml(taxType)} (${taxRate}%)</span><span>${fmtCurrency(taxAmount)}</span></div>
+    ` : `
+      <div class="row"><span>Precio del vehículo${isRebu ? " (REBU)" : ""}</span><span>${fmtCurrency(totalAmount)}</span></div>
+    `}
+    <div class="row total"><span>Precio total venta</span><span>${fmtCurrency(totalAmount)}</span></div>
+    <div class="row"><span>Señal entregada</span><span>−${fmtCurrency(senal)}</span></div>
+    <div class="row total"><span>Resto a abonar</span><span>${fmtCurrency(restoPagar)}</span></div>
+  </div>
+  ${reservation.notes ? `<p style="font-size:11px;color:#4b5563"><strong>Observaciones:</strong> ${escapeHtml(reservation.notes)}</p>` : ""}
+
+  ${renderClauses(clauses || [], fallbackClauses)}
+
+  <p class="place-date">${escapeHtml(placeDate)}</p>
+
+  <div class="signatures">
+    <div class="signature-box">
+      <div class="label">El VENDEDOR</div>
+      <div class="name">${escapeHtml(docName)}</div>
+    </div>
+    <div class="signature-box">
+      <div class="label">El COMPRADOR</div>
+      <div class="name">${escapeHtml(buyerName(buyer))}</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Documento generado el ${fmtDateLong(new Date().toISOString())} · ${escapeHtml(docName)}
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+async function generateProformaInvoice(
+  admin: any,
+  reservationId: string,
+): Promise<string> {
+  const { data: reservation, error: rerr } = await admin
+    .from("reservations")
+    .select("*")
+    .eq("id", reservationId)
+    .maybeSingle();
+  if (rerr) throw new Error("Reserva no encontrada: " + rerr.message);
+  if (!reservation) throw new Error("Reserva no encontrada");
+
+  const [{ data: vehicle }, { data: buyer }, { data: company }] =
+    await Promise.all([
+      admin.from("vehicles").select("*").eq("id", reservation.vehicle_id).maybeSingle(),
+      admin.from("buyers").select("*").eq("id", reservation.buyer_id).maybeSingle(),
+      admin.from("company_settings").select("*").limit(1).maybeSingle(),
+    ]);
+
+  const pvp = Number(reservation.vehicle_pvp_snapshot || vehicle?.pvp_base || 0);
+  const taxRate = Number(vehicle?.tax_rate ?? company?.igic_rate ?? 7);
+  const taxType = String(vehicle?.tax_type || "igic").toUpperCase();
+  const isRebu = String(vehicle?.tax_type || "").toLowerCase() === "rebu";
+  const isExempt = String(vehicle?.tax_type || "").toLowerCase() === "exento";
+  const showsTaxBreakdown = !isRebu && !isExempt && taxRate > 0;
+
+  const baseAmount = showsTaxBreakdown ? pvp / (1 + taxRate / 100) : pvp;
+  const taxAmount = showsTaxBreakdown ? pvp - baseAmount : 0;
+  const totalAmount = pvp;
+
+  const docId = `PRO-${(reservation.id || "").slice(0, 8).toUpperCase()}`;
+  const docDate = fmtDate(reservation.reservation_date || reservation.created_at);
+  const docName = company?.company_name || "Carove";
+
+  const vehicleDescription = `${vehicle?.brand || ""} ${vehicle?.model || ""}${vehicle?.version ? " " + vehicle.version : ""}${vehicle?.plate ? " (" + vehicle.plate + ")" : ""}`.trim();
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura proforma ${docId}</title>
+${COMMON_CSS}
+<style>
+  .proforma-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 120px;
+    font-weight: 900;
+    color: rgba(31, 42, 68, 0.06);
+    z-index: 0;
+    pointer-events: none;
+    letter-spacing: 0.05em;
+  }
+  .proforma-banner {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 10px 14px;
+    margin: 0 0 18px;
+    font-size: 11px;
+    color: #92400e;
+  }
+  .proforma-banner strong { color: #78350f; }
+</style>
+</head>
+<body>
+${TOOLBAR_HTML}
+<div class="page" style="position: relative;">
+  <div class="proforma-watermark">PROFORMA</div>
+
+  ${renderHeader({
+    company,
+    docType: "Factura proforma",
+    docId,
+    docDate,
+  })}
+
+  <div class="proforma-banner">
+    <strong>DOCUMENTO PROFORMA — Sin valor fiscal.</strong> Este documento es un presupuesto detallado y no constituye una factura oficial. No genera obligaciones tributarias hasta su conversión en factura.
+  </div>
+
+  <h1 style="margin-top: 8px;">FACTURA PROFORMA</h1>
+
+  <div class="grid-2">
+    <div class="party">
+      <div class="label">Emisor</div>
+      <div class="name">${escapeHtml(docName)}</div>
+      <div class="meta">
+        ${company?.cif ? `CIF: ${escapeHtml(company.cif)}<br>` : ""}
+        ${[company?.address, company?.postal_code, company?.city]
+          .filter(Boolean)
+          .map(escapeHtml)
+          .join(", ")}
+        ${company?.phone ? `<br>Tel: ${escapeHtml(company.phone)}` : ""}
+        ${company?.email ? `<br>${escapeHtml(company.email)}` : ""}
+      </div>
+    </div>
+    <div class="party">
+      <div class="label">Cliente</div>
+      <div class="name">${escapeHtml(buyerName(buyer))}</div>
+      <div class="meta">
+        ${buyer ? `${buyer.client_type === "profesional" || buyer.client_type === "empresa" ? "CIF" : "DNI"}: ${escapeHtml(buyerTaxId(buyer))}<br>` : ""}
+        ${escapeHtml(buyerFullAddress(buyer))}
+        ${buyer?.phone ? `<br>Tel: ${escapeHtml(buyer.phone)}` : ""}
+        ${buyer?.email ? `<br>${escapeHtml(buyer.email)}` : ""}
+      </div>
+    </div>
+  </div>
+
+  <h2>Detalle</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Concepto</th>
+        <th class="right" style="width:18%">Base</th>
+        <th class="right" style="width:14%">${showsTaxBreakdown ? `${escapeHtml(taxType)} ${taxRate}%` : "Impuesto"}</th>
+        <th class="right" style="width:18%">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <div style="font-weight:600">${escapeHtml(vehicleDescription || "Vehículo")}</div>
+          ${vehicle?.vin ? `<div style="font-size:10px;color:#6b7280;margin-top:2px;font-family:ui-monospace,monospace">VIN: ${escapeHtml(vehicle.vin)}</div>` : ""}
+          ${vehicle?.km_entry != null ? `<div style="font-size:10px;color:#6b7280">${Number(vehicle.km_entry).toLocaleString("es-ES")} km</div>` : ""}
+          ${isRebu ? `<div style="font-size:10px;color:#92400e;margin-top:2px"><strong>Régimen Especial Bienes Usados (REBU)</strong> — IGIC no deducible</div>` : ""}
+          ${isExempt ? `<div style="font-size:10px;color:#92400e;margin-top:2px"><strong>Operación exenta de impuesto</strong></div>` : ""}
+        </td>
+        <td class="right">${fmtCurrency(baseAmount)}</td>
+        <td class="right">${showsTaxBreakdown ? fmtCurrency(taxAmount) : "—"}</td>
+        <td class="right" style="font-weight:600">${fmtCurrency(totalAmount)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="summary" style="margin-top: 14px;">
+    ${showsTaxBreakdown ? `
+      <div class="row"><span>Base imponible</span><span>${fmtCurrency(baseAmount)}</span></div>
+      <div class="row"><span>${escapeHtml(taxType)} (${taxRate}%)</span><span>${fmtCurrency(taxAmount)}</span></div>
+    ` : `
+      <div class="row"><span>Importe${isRebu ? " (REBU)" : isExempt ? " (exento)" : ""}</span><span>${fmtCurrency(totalAmount)}</span></div>
+    `}
+    <div class="row total"><span>Total proforma</span><span>${fmtCurrency(totalAmount)}</span></div>
+  </div>
+
+  <p style="font-size:11px;color:#4b5563;margin-top: 20px;">
+    <strong>Validez:</strong> Esta proforma es un presupuesto vinculado a la reserva
+    ${reservation.expiration_date ? `con vencimiento el <strong>${fmtDate(reservation.expiration_date)}</strong>` : "actualmente activa"}.
+    Una vez formalizada la operación, se emitirá la factura oficial con número de serie y validez fiscal completa.
+  </p>
+
+  ${reservation.notes ? `<p style="font-size:11px;color:#4b5563"><strong>Observaciones:</strong> ${escapeHtml(reservation.notes)}</p>` : ""}
+
+  <div class="footer">
+    Proforma generada el ${fmtDateLong(new Date().toISOString())} · ${escapeHtml(docName)}
+    · Sin validez fiscal hasta su conversión en factura oficial.
+  </div>
+</div>
+</body>
+</html>`;
+}
+
 // ─── Handler principal ─────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -918,15 +1271,27 @@ Deno.serve(async (req: Request) => {
         html = await generatePurchaseContract(admin, params.purchase_id);
         break;
       }
-      case "sales-contract":
-      case "proforma-invoice":
+      case "sales-contract": {
+        if (!params.reservation_id) {
+          return json({ error: "Falta params.reservation_id" }, 400);
+        }
+        html = await generateSalesContract(admin, params.reservation_id);
+        break;
+      }
+      case "proforma-invoice": {
+        if (!params.reservation_id) {
+          return json({ error: "Falta params.reservation_id" }, 400);
+        }
+        html = await generateProformaInvoice(admin, params.reservation_id);
+        break;
+      }
       case "finance-proposal":
       case "pyg":
       case "balance":
       case "vehicle-margin":
         return json(
           {
-            error: `Tipo '${type}' aún no implementado en esta versión de la Edge Function. Implementados: reservation-contract, reservation-receipt, purchase-contract.`,
+            error: `Tipo '${type}' aún no implementado en esta versión de la Edge Function. Implementados: reservation-contract, reservation-receipt, purchase-contract, sales-contract, proforma-invoice.`,
           },
           501,
         );
