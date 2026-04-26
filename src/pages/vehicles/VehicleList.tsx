@@ -179,7 +179,7 @@ export default function VehicleList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los centros</SelectItem>
-              {branches.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {branches.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Input type="number" placeholder="PVP mín." value={priceMin} onChange={e => setPriceMin(e.target.value)} className="h-10 sm:h-8 text-xs w-full sm:w-[100px]" />

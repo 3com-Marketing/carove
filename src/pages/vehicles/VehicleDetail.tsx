@@ -306,7 +306,7 @@ export default function VehicleDetail() {
   const engineOptions = [{ value: 'gasolina', label: 'Gasolina' }, { value: 'diesel', label: 'Diésel' }, { value: 'hibrido', label: 'Híbrido' }, { value: 'electrico', label: 'Eléctrico' }];
   const transOptions = [{ value: 'manual', label: 'Manual' }, { value: 'automatico', label: 'Automático' }];
   const taxOptions = [{ value: 'igic', label: 'IGIC' }, { value: 'iva', label: 'IVA' }];
-  const centerOptions = (branches || []).map(c => ({ value: c, label: c }));
+  const centerOptions = (branches || []).map(b => ({ value: b.name, label: b.name }));
 
   return (
     <div className="space-y-4 animate-fade-in">

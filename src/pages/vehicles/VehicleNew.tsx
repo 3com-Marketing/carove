@@ -677,7 +677,7 @@ export default function VehicleNew() {
             <div>
               <Label>Centro</Label>
               <Select value={form.center} onValueChange={v => set('center', v)}><SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{branches.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </CardContent>
