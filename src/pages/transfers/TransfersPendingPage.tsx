@@ -36,7 +36,7 @@ export default function TransfersPendingPage() {
 
   // profile.branch_id es uuid; las tablas vehicle_transfers usan nombre de sucursal
   // como string, así que resolvemos el nombre del usuario desde la lista de branches.
-  const userBranchId = (profile as any)?.branch_id as string | null;
+  const userBranchId = profile?.branch_id ?? null;
   const userBranch = branches.find(b => b.id === userBranchId)?.name || null;
   const [branchFilter, setBranchFilter] = useState<string>(userBranch || 'all');
 

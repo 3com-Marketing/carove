@@ -59,19 +59,6 @@ export default function VehicleNew() {
   };
 
   const handleGenerate = async () => {
-    // ─────────────────────────────────────────────────────────────────────
-    // DESACTIVADO: Edge Function `generate-vehicle` no desplegada.
-    // Cuando esté disponible, restaurar el bloque comentado abajo.
-    // ─────────────────────────────────────────────────────────────────────
-    toast({
-      title: 'Generación con IA no disponible',
-      description: 'La Edge Function `generate-vehicle` aún no está desplegada. Rellena el formulario manualmente.',
-      variant: 'destructive',
-    });
-    return;
-
-    /* eslint-disable */
-    // @ts-ignore — código original preservado para reactivación
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-vehicle');
@@ -101,7 +88,6 @@ export default function VehicleNew() {
     } finally {
       setGenerating(false);
     }
-    /* eslint-enable */
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

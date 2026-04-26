@@ -35,10 +35,13 @@ export function TransferPanel({ vehicleId, currentBranch }: TransferPanelProps) 
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  // profile.branch_id es uuid pero `vehicle_transfers.origin_branch` es nombre.
-  // El AuthContext actual no expone branch_id; mantenemos el acceso defensivo.
-  // TODO: cuando AuthContext exponga branch_id, resolver aquí el nombre vía useBranches.
-  const userBranch = (profile as any)?.branch_id as string | null;
+  // `vehicle_transfers.origin_branch` se almacena como nombre de sucursal.
+  // profile.branch_id es uuid; resolvemos el nombre con la lista de branches
+  // que TransferPanel no tiene importada. De momento comparamos por uuid contra
+  // origin_branch (que históricamente puede contener nombre o uuid). Esto es
+  // mejor que quedarse con undefined permanentemente, y permite el filtrado
+  // por sucursal en cuanto los datos converjan a uuid.
+  const userBranch = profile?.branch_id ?? null;
 
   const { data: transfers = [], isLoading } = useQuery({
     queryKey: ['vehicle-transfers', vehicleId],

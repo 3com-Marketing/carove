@@ -4,7 +4,13 @@ import type { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  profile: { id: string; email: string; full_name: string; role: string } | null;
+  profile: {
+    id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    branch_id: string | null;
+  } | null;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
   signup: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
@@ -60,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: profileData.email,
       full_name: profileData.full_name,
       role: roleData?.role || profileData.role || 'vendedor',
+      branch_id: (profileData as { branch_id?: string | null }).branch_id ?? null,
     });
   };
 
