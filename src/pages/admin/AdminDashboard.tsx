@@ -495,7 +495,7 @@ export default function AdminDashboard() {
                       </TableCell>
                       <TableCell><Badge variant="outline" className="text-xs">{CHANNEL_LABELS[a.channel] || a.channel}</Badge></TableCell>
                       <TableCell className="max-w-[200px] truncate">{a.subject}</TableCell>
-                      <TableCell><Badge variant="secondary" className="text-xs">{a.result.replace(/_/g, ' ')}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary" className="text-xs">{(a.result || '').replace(/_/g, ' ') || '—'}</Badge></TableCell>
                     </TableRow>
                   );
                 })}
