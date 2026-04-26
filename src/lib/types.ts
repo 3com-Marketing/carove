@@ -171,16 +171,16 @@ export const RESERVATION_STATUS_COLORS: Record<ReservationWorkflowStatus, string
 };
 
 export type ReservationDocumentType =
-  | 'contrato'
-  | 'recibo'
-  | 'documentacion'
-  | 'otro';
+  | 'reservation_document'
+  | 'deposit_receipt'
+  | 'sales_contract'
+  | 'proforma_invoice';
 
 export const RESERVATION_DOC_TYPE_LABELS: Record<ReservationDocumentType, string> = {
-  contrato: 'Contrato',
-  recibo: 'Recibo',
-  documentacion: 'Documentación',
-  otro: 'Otro',
+  reservation_document: 'Documento de Reserva',
+  deposit_receipt: 'Recibo de Señal',
+  sales_contract: 'Contrato de Compraventa',
+  proforma_invoice: 'Factura Proforma',
 };
 
 export const TIMELINE_EVENT_LABELS: Record<string, string> = {

@@ -58,7 +58,11 @@ export function ReservationTimeline({ reservationId }: Props) {
               </p>
               <p className="text-[10px] text-muted-foreground">
                 {ev.actor_name && <span>{ev.actor_name} · </span>}
-                {format(new Date(ev.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                {(() => {
+                  if (!ev.created_at) return '—';
+                  const d = new Date(ev.created_at);
+                  return isNaN(d.getTime()) ? '—' : format(d, "dd/MM/yyyy HH:mm", { locale: es });
+                })()}
               </p>
             </div>
           </div>

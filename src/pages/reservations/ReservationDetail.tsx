@@ -88,9 +88,10 @@ export default function ReservationDetail() {
   );
 
   const wfStatus = (reservation.reservation_status || 'draft') as ReservationWorkflowStatus;
-  const exp = new Date(reservation.expiration_date);
-  const isExpired = isPast(exp) && wfStatus === 'signed';
-  const hoursLeft = differenceInHours(exp, new Date());
+  const exp = reservation.expiration_date ? new Date(reservation.expiration_date) : null;
+  const expValid = exp instanceof Date && !isNaN(exp.getTime());
+  const isExpired = expValid && isPast(exp!) && wfStatus === 'signed';
+  const hoursLeft = expValid ? differenceInHours(exp!, new Date()) : 0;
   const isReadOnly = ['cancelled', 'converted'].includes(wfStatus);
   const allowedTransitions = VALID_TRANSITIONS[wfStatus] || [];
 
@@ -509,7 +510,7 @@ export default function ReservationDetail() {
             <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4" /> Fecha límite</CardTitle></CardHeader>
             <CardContent>
               <p className={cn('text-lg font-bold', isExpired && 'text-destructive')}>
-                {format(exp, 'dd/MM/yyyy HH:mm', { locale: es })}
+                {expValid ? format(exp!, 'dd/MM/yyyy HH:mm', { locale: es }) : '—'}
               </p>
               {isExpired && <p className="text-sm text-destructive font-medium mt-1">⚠ Reserva vencida</p>}
               {!isExpired && hoursLeft <= 48 && hoursLeft > 0 && wfStatus === 'signed' && (

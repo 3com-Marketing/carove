@@ -61,7 +61,11 @@ export function ReservationDocumentsCard({ reservationId, onViewDocument, onGene
                     )}
                     <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">v{doc.version}</Badge>
                     <span className="text-[10px] text-muted-foreground">
-                      {format(new Date(doc.generated_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                      {(() => {
+                        if (!doc.generated_at) return '—';
+                        const d = new Date(doc.generated_at);
+                        return isNaN(d.getTime()) ? '—' : format(d, 'dd/MM/yyyy HH:mm', { locale: es });
+                      })()}
                     </span>
                   </div>
                 ) : (
