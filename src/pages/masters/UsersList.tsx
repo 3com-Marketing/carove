@@ -32,7 +32,7 @@ interface UserRow {
   full_name: string;
   role: UserRole;
   active: boolean;
-  branch: string | null;
+  branch_id: string | null;
   created_at: string;
 }
 
@@ -48,7 +48,7 @@ async function fetchUsersWithRoles(): Promise<UserRow[]> {
     full_name: p.full_name,
     role: (roles?.find(r => r.user_id === p.user_id)?.role || 'vendedor') as UserRole,
     active: p.active,
-    branch: (p as any).branch || null,
+    branch_id: (p as any).branch_id || null,
     created_at: p.created_at,
   }));
 }
@@ -64,14 +64,37 @@ export default function UsersList() {
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: fetchUsersWithRoles });
 
-  // Change role mutation
+  // Change role mutation — SELECT → INSERT/UPDATE para soportar usuarios sin
+  // fila previa en user_roles (un UPDATE solo no falla pero tampoco hace nada).
   const changeRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: UserRole }) => {
-      const { error } = await supabase
+      const { data: existing, error: selErr } = await supabase
         .from('user_roles')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (selErr) throw selErr;
+
+      if (existing) {
+        const { error } = await supabase
+          .from('user_roles')
+          .update({ role: newRole })
+          .eq('user_id', userId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: newRole });
+        if (error) throw error;
+      }
+
+      // Espejo en profiles.role para mantener compatibilidad con código antiguo
+      // que aún lee profiles.role como fallback.
+      const { error: profErr } = await supabase
+        .from('profiles')
         .update({ role: newRole })
         .eq('user_id', userId);
-      if (error) throw error;
+      if (profErr) throw profErr;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -102,8 +125,8 @@ export default function UsersList() {
 
   // Change branch mutation
   const changeBranch = useMutation({
-    mutationFn: async ({ userId, branch }: { userId: string; branch: string | null }) => {
-      await updateProfileBranch(userId, branch);
+    mutationFn: async ({ userId, branchId }: { userId: string; branchId: string | null }) => {
+      await updateProfileBranch(userId, branchId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -224,8 +247,8 @@ export default function UsersList() {
                   </TableCell>
                   <TableCell>
                     <Select
-                      value={u.branch || '_none'}
-                      onValueChange={(val) => changeBranch.mutate({ userId: u.user_id, branch: val === '_none' ? null : val })}
+                      value={u.branch_id || '_none'}
+                      onValueChange={(val) => changeBranch.mutate({ userId: u.user_id, branchId: val === '_none' ? null : val })}
                       disabled={changeBranch.isPending}
                     >
                       <SelectTrigger className="w-[140px] h-8 text-xs">
@@ -233,8 +256,8 @@ export default function UsersList() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">Sin asignar</SelectItem>
-                        {branches.map(c => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        {branches.map(b => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

@@ -2598,10 +2598,10 @@ export async function cancelTransfer(transferId: string, reason: string, userId:
   return data as unknown as VehicleTransfer;
 }
 
-export async function updateProfileBranch(userId: string, branch: string | null): Promise<void> {
+export async function updateProfileBranch(userId: string, branchId: string | null): Promise<void> {
   const { error } = await supabase
     .from('profiles')
-    .update({ branch } as any)
+    .update({ branch_id: branchId } as any)
     .eq('user_id', userId);
   if (error) throw error;
 }

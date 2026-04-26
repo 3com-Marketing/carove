@@ -34,7 +34,10 @@ export default function TransfersPendingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const userBranch = (profile as any)?.branch as string | null;
+  // profile.branch_id es uuid; las tablas vehicle_transfers usan nombre de sucursal
+  // como string, así que resolvemos el nombre del usuario desde la lista de branches.
+  const userBranchId = (profile as any)?.branch_id as string | null;
+  const userBranch = branches.find(b => b.id === userBranchId)?.name || null;
   const [branchFilter, setBranchFilter] = useState<string>(userBranch || 'all');
 
   const { data: pending = [], isLoading } = useQuery({
@@ -183,8 +186,8 @@ export default function TransfersPendingPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las sucursales</SelectItem>
-              {branches.map(c => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
+              {branches.map(b => (
+                <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
